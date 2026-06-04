@@ -4,7 +4,7 @@ import {
   type Response,
 } from "express";
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
+import jwt, { type SignOptions } from "jsonwebtoken";
 
 import { Account } from "../models/account.js";
 import HttpError from "../http-error/http-error.js";
@@ -57,10 +57,13 @@ export const loginAccount = async (
 
   let token;
   try {
+    const signOptions: SignOptions = {
+      expiresIn: JWT_EXPIRES_IN as SignOptions["expiresIn"],
+    };
     token = jwt.sign(
       { userId: existingAccount.userId, username: existingAccount.username },
       JWT_SECRET,
-      { expiresIn: JWT_EXPIRES_IN },
+      signOptions,
     );
   } catch (err) {
     const error = new HttpError("An unknown error occurred.", 500);
