@@ -19,7 +19,7 @@ npm run dev
 |---------|----------------|
 | `npm run dev` | Watch TypeScript + run server with nodemon |
 | `npm start` | Build and run production server |
-| `npm run seed` | Load demo users and boards |
+| `npm run seed` | Clear DB and load `data/data.json` (accounts + boards only) |
 
 ## API
 
@@ -62,10 +62,25 @@ scripts/
   seed.ts                # npm run seed
 ```
 
-## Demo users
+## Troubleshooting
+
+**"Connection was refused"** when calling the API usually means the Node server is not running. Start it with `npm run dev`.
+
+If the server is running but API calls fail, open `http://localhost:3000/health`:
+- `database: connected` — MongoDB is fine
+- `database: disconnected` — fix `MONGODB_URI` in `.env` (local MongoDB on `27017`, or your Atlas URI). Then run `npm run seed`.
+
+**MongoDB Compass "connection refused"** on `localhost:27017` means local MongoDB is not installed/running. This project can use Atlas instead — put that URI in `.env`, not Compass localhost.
+
+Use database name `kanban_db` in your URI (or run seed against whichever DB name you use).
+
+## Seed data
+
+Edit `data/data.json`, then run `npm run seed`. This **drops every collection** in the database configured by `MONGODB_URI`, then inserts only kanban **accounts** and **boards** (no users/cereals).
 
 | username | password |
 |----------|----------|
 | demo     | demo1234 |
-| lenny    | demo1234 |
-| lisa     | demo1234 |
+| guest    | guest    |
+| manager  | manager  |
+| admin    | admin    |

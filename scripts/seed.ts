@@ -1,59 +1,71 @@
 import chalk from "chalk";
 import "dotenv/config";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 
 import { Account } from "../src/models/account.js";
 import { Board } from "../src/models/board.js";
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const DATA_FILE = path.join(__dirname, "../data/data.json");
+
 const MONGODB_URI = process.env.MONGODB_URI;
 
-const seedAccounts = [
-  { id: "1", username: "demo", password: "demo1234" },
-  { id: "2", username: "lenny", password: "demo1234" },
-  { id: "3", username: "lisa", password: "demo1234" },
-];
+interface SeedAccount {
+  id: string;
+  username: string;
+  password_hash: string;
+}
 
-const seedBoards = [
-  {
-    id: 1,
-    name: "My Board",
-    columns: [
-      {
-        id: 1,
-        name: "To Do",
-        position: 0,
-        board_id: 1,
-        tasks: [
-          {
-            id: 1,
-            title: "Welcome Task",
-            description: "Drag me to move",
-            assignee: "",
-            column_id: 1,
-            position: 0,
-          },
-        ],
-      },
-      {
-        id: 2,
-        name: "In Progress",
-        position: 1,
-        board_id: 1,
-        tasks: [
-          {
-            id: 2,
-            title: "Build Kanban UI",
-            description: "Connect frontend to this API",
-            assignee: "lenny",
-            column_id: 2,
-            position: 0,
-          },
-        ],
-      },
-    ],
-  },
-];
+interface SeedTask {
+  id: number;
+  title: string;
+  description: string;
+  assignee: string;
+  column_id: number;
+  position: number;
+}
+
+interface SeedColumn {
+  id: number;
+  name: string;
+  position: number;
+  board_id: number;
+  tasks: SeedTask[];
+}
+
+interface SeedBoard {
+  id: number;
+  name: string;
+  columns: SeedColumn[];
+}
+
+interface SeedData {
+  accounts: SeedAccount[];
+  boards: SeedBoard[];
+}
+
+const loadSeedData = (): SeedData => {
+  const raw = fs.readFileSync(DATA_FILE, "utf-8");
+  return JSON.parse(raw) as SeedData;
+};
+
+const clearDatabase = async (): Promise<void> => {
+  const db = mongoose.connection.db;
+  if (!db) {
+    throw new Error("Database connection is not ready");
+  }
+
+  const existing = await db.listCollections().toArray();
+
+  for (const { name } of existing) {
+    await db.dropCollection(name);
+    console.log(chalk.yellow(`Dropped collection: ${name}`));
+  }
+};
 
 const seed = async () => {
   if (!MONGODB_URI) {
@@ -61,27 +73,26 @@ const seed = async () => {
     process.exit(1);
   }
 
+  const data = loadSeedData();
+
   try {
-    await mongoose.connect(MONGODB_URI, { serverSelectionTimeoutMS: 5000 });
+    await mongoose.connect(MONGODB_URI, { serverSelectionTimeoutMS: 10000 });
     console.log(chalk.green("Connected to MongoDB"));
 
-    if (process.env.NODE_ENV !== "production") {
-      await Account.deleteMany({});
-      await Board.deleteMany({});
-      console.log(chalk.yellow("Cleared accounts and boards"));
-    }
+    console.log(chalk.cyanBright("Clearing database..."));
+    await clearDatabase();
 
-    for (const account of seedAccounts) {
-      const passwordHash = await bcrypt.hash(account.password, 12);
+    for (const account of data.accounts) {
+      const passwordHash = await bcrypt.hash(account.password_hash, 12);
       await Account.create({
         userId: account.id,
-        username: account.username,
+        username: account.username.toLowerCase(),
         passwordHash,
       });
       console.log(chalk.gray(`Added account: ${account.username}`));
     }
 
-    for (const board of seedBoards) {
+    for (const board of data.boards) {
       await Board.create({
         boardId: board.id,
         name: board.name,
@@ -103,7 +114,11 @@ const seed = async () => {
       console.log(chalk.gray(`Added board: ${board.name}`));
     }
 
-    console.log(chalk.cyanBright("Seed completed. Login with demo / demo1234"));
+    console.log(
+      chalk.green(
+        `Seed completed — ${data.accounts.length} accounts, ${data.boards.length} boards from data/data.json`,
+      ),
+    );
   } catch (error) {
     console.error(chalk.red("Seed failed"), error);
     process.exit(1);

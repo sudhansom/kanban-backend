@@ -15,7 +15,7 @@ import { Board } from "./models/board.js";
 
 const app: Application = express();
 
-const PORT = process.env.PORT || 3000;
+const PORT = Number(process.env.PORT) || 3000;
 const MONGODB_URI = process.env.MONGODB_URI;
 
 if (!MONGODB_URI) {
@@ -36,6 +36,28 @@ app.use((req: Request, res: Response, next: NextFunction) => {
     "GET, POST, PATCH, PUT, DELETE, OPTIONS",
   );
   next();
+});
+
+app.get("/health", (_req: Request, res: Response) => {
+  const dbReady = mongoose.connection.readyState === 1;
+  res.status(dbReady ? 200 : 503).json({
+    success: dbReady,
+    data: {
+      api: "ok",
+      database: dbReady ? "connected" : "disconnected",
+    },
+  });
+});
+
+app.use("/api", (req: Request, res: Response, next: NextFunction) => {
+  if (mongoose.connection.readyState === 1) {
+    return next();
+  }
+  res.status(503).json({
+    success: false,
+    error:
+      "Database is not connected yet. Check MONGODB_URI in .env and that MongoDB is running.",
+  });
 });
 
 app.use("/api/accounts", accountRoute);
@@ -62,10 +84,16 @@ app.use(
 );
 
 const startServer = async () => {
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(
+      chalk.blue(`Server is running on http://localhost:${PORT}`),
+    );
+    console.log(chalk.gray(`Health check: http://localhost:${PORT}/health`));
+  });
+
   try {
     await mongoose.connect(MONGODB_URI, {
-      family: 4,
-      serverSelectionTimeoutMS: 5000,
+      serverSelectionTimeoutMS: 10000,
     });
 
     console.log(chalk.green("Connected to MongoDB"));
@@ -76,14 +104,18 @@ const startServer = async () => {
     } else {
       console.log(chalk.gray("boards already in database"));
     }
-
-    app.listen(PORT, () => {
-      console.log(chalk.blue(`Server is running on http://localhost:${PORT}`));
-    });
   } catch (error) {
-    console.error(chalk.redBright("MongoDB connection failed."));
+    console.error(
+      chalk.redBright(
+        "MongoDB connection failed — API stays up but /api routes return 503 until DB connects.",
+      ),
+    );
     console.error(error);
-    process.exit(1);
+    console.error(
+      chalk.yellow(
+        "Tips: start local MongoDB, or fix Atlas URI / IP whitelist / database name in .env",
+      ),
+    );
   }
 };
 
