@@ -11,6 +11,7 @@ import mongoose from "mongoose";
 import accountRoute from "./routes/account-routes.js";
 import boardRoute from "./routes/board-routes.js";
 import HttpError from "./http-error/http-error.js";
+import { Board } from "./models/board.js";
 
 const app: Application = express();
 
@@ -68,6 +69,13 @@ const startServer = async () => {
     });
 
     console.log(chalk.green("Connected to MongoDB"));
+
+    const boardCount = await Board.countDocuments();
+    if (boardCount === 0) {
+      console.log(chalk.cyanBright("No boards found. Run npm run seed"));
+    } else {
+      console.log(chalk.gray("boards already in database"));
+    }
 
     app.listen(PORT, () => {
       console.log(chalk.blue(`Server is running on http://localhost:${PORT}`));
