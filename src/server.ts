@@ -8,6 +8,7 @@ import chalk from "chalk";
 import "dotenv/config";
 import mongoose from "mongoose";
 
+import accountRoute from "./routes/account-routes.js";
 import HttpError from "./http-error/http-error.js";
 
 const app: Application = express();
@@ -34,6 +35,8 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   );
   next();
 });
+
+app.use("/api/accounts", accountRoute);
 
 app.use((req: Request, res: Response, next: NextFunction) => {
   const error = new HttpError("Page not Found", 404);
