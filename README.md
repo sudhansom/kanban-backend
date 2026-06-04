@@ -41,6 +41,21 @@ Response:
 }
 ```
 
+### Get all accounts (no token)
+
+```http
+GET /api/accounts
+```
+
+Response (array, matches Angular `User[]`):
+
+```json
+[
+  { "id": "1", "username": "demo", "password_hash": "demo1234" },
+  { "id": "2", "username": "guest", "password_hash": "guest" }
+]
+```
+
 ### Get boards (needs token)
 
 ```http

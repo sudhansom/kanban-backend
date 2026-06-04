@@ -8,6 +8,7 @@ import jwt, { type SignOptions } from "jsonwebtoken";
 
 import { Account } from "../models/account.js";
 import HttpError from "../http-error/http-error.js";
+import { loadDataFile } from "../utils/load-data.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || "do-not-share";
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d";
@@ -77,4 +78,18 @@ export const loginAccount = async (
       token,
     },
   });
+};
+
+export const getAllAccounts = async (
+  _req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { accounts } = loadDataFile();
+    res.status(200).json(accounts);
+  } catch (err) {
+    const error = new HttpError("An unknown error occurred.", 500);
+    return next(error);
+  }
 };
