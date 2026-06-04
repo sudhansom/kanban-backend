@@ -3,6 +3,7 @@ import { type IBoard, type IColumn, type ITask } from "./board-types.js";
 
 const Schema = mongoose.Schema;
 
+/** Embedded task sub-document (no own `_id`). */
 const taskSchema = new Schema<ITask>(
   {
     taskId: { type: Number, required: true },
@@ -15,6 +16,7 @@ const taskSchema = new Schema<ITask>(
   { _id: false },
 );
 
+/** Embedded column sub-document containing an array of tasks. */
 const columnSchema = new Schema<IColumn>(
   {
     columnId: { type: Number, required: true },
@@ -26,6 +28,10 @@ const columnSchema = new Schema<IColumn>(
   { _id: false },
 );
 
+/**
+ * Board schema: one document per board with columns and tasks inside.
+ * Collection name: `boards`
+ */
 const boardSchema = new Schema<IBoard>(
   {
     boardId: { type: Number, required: true, unique: true },
@@ -35,4 +41,5 @@ const boardSchema = new Schema<IBoard>(
   { timestamps: true, collection: "boards" },
 );
 
+/** Model used by GET /api/boards and the seed script. */
 export const Board = mongoose.model<IBoard>("Board", boardSchema);

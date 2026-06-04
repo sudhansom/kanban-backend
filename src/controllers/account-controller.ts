@@ -13,6 +13,13 @@ import { loadDataFile } from "../utils/load-data.js";
 const JWT_SECRET = process.env.JWT_SECRET || "do-not-share";
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d";
 
+/**
+ * POST /api/accounts — server-side login.
+ *
+ * Body: `{ username, password }`
+ * Checks credentials against MongoDB (bcrypt).
+ * Returns JWT for protected routes like GET /api/boards.
+ */
 export const loginAccount = async (
   req: Request,
   res: Response,
@@ -80,6 +87,14 @@ export const loginAccount = async (
   });
 };
 
+/**
+ * GET /api/accounts — list accounts for the Angular login screen.
+ *
+ * No token required. Returns a raw JSON array (not `{ success, data }`):
+ * `[{ id, username, password_hash }, ...]`
+ *
+ * Data comes from data/data.json so it matches what users see after seeding.
+ */
 export const getAllAccounts = async (
   _req: Request,
   res: Response,

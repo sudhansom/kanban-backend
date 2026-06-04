@@ -20,6 +20,17 @@ flowchart LR
 
 ---
 
+## Inline Code Documentation
+
+Every source file includes **JSDoc comments** above classes, interfaces, functions, and key middleware blocks. New contributors should read:
+
+- `src/server.ts` — startup, CORS, and error handling
+- `src/controllers/` — what each endpoint does
+- `src/middleware/check-auth.ts` — how JWT protection works
+- `scripts/seed.ts` — how seeding clears and reloads the database
+
+---
+
 ## Layered Design
 
 The codebase follows a simple three-layer pattern (same style as cereal-backend):

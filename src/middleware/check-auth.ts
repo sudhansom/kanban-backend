@@ -4,10 +4,23 @@ import HttpError from "../http-error/http-error.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || "do-not-share";
 
+/**
+ * Express request after JWT middleware runs.
+ * `userId` is set when the Bearer token is valid.
+ */
 export type AuthenticatedRequest = Request & {
   userId?: string;
 };
 
+/**
+ * Protects routes that require a logged-in user.
+ *
+ * Expects header: `Authorization: Bearer <token>`
+ * Token must be issued by POST /api/accounts and signed with JWT_SECRET.
+ *
+ * On success, sets `req.userId` and calls `next()`.
+ * On failure, passes HttpError 401 to the error handler.
+ */
 export const isAuthenticated = (
   req: AuthenticatedRequest,
   res: Response,

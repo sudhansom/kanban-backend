@@ -7,6 +7,10 @@ import { type IBoard, type IColumn } from "../models/board-types.js";
 import HttpError from "../http-error/http-error.js";
 import { type AuthenticatedRequest } from "../middleware/check-auth.js";
 
+/**
+ * Converts a MongoDB board document to the JSON shape the frontend expects.
+ * Database uses camelCase (`boardId`); API uses `id` and snake_case (`board_id`, `column_id`).
+ */
 const mapBoardToApi = (board: IBoard) => ({
   id: board.boardId,
   name: board.name,
@@ -26,6 +30,11 @@ const mapBoardToApi = (board: IBoard) => ({
   })),
 });
 
+/**
+ * GET /api/boards — return every board with columns and tasks.
+ *
+ * Requires `Authorization: Bearer <token>` (see isAuthenticated middleware).
+ */
 export const getAllBoards = async (
   _req: AuthenticatedRequest,
   res: Response,

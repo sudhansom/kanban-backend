@@ -1,3 +1,4 @@
+/** A single task card inside a column (embedded in a board document). */
 export interface ITask {
   taskId: number;
   title: string;
@@ -7,6 +8,7 @@ export interface ITask {
   position: number;
 }
 
+/** A Kanban column with its tasks (embedded in a board document). */
 export interface IColumn {
   columnId: number;
   name: string;
@@ -15,6 +17,10 @@ export interface IColumn {
   tasks: ITask[];
 }
 
+/**
+ * A Kanban board with nested columns and tasks.
+ * Stored as one MongoDB document per board (no separate task/column collections).
+ */
 export interface IBoard {
   boardId: number;
   name: string;

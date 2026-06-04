@@ -1,3 +1,10 @@
+/**
+ * Database seed script — run with: npm run seed
+ *
+ * 1. Connects to MongoDB (MONGODB_URI from .env)
+ * 2. Drops every collection in that database
+ * 3. Inserts accounts and boards from data/data.json
+ */
 import chalk from "chalk";
 import "dotenv/config";
 import fs from "fs";
@@ -14,6 +21,7 @@ const DATA_FILE = path.join(__dirname, "../data/data.json");
 
 const MONGODB_URI = process.env.MONGODB_URI;
 
+/** Account row in data/data.json (plain password before hashing). */
 interface SeedAccount {
   id: string;
   username: string;
@@ -48,11 +56,16 @@ interface SeedData {
   boards: SeedBoard[];
 }
 
+/** Reads data/data.json from the project root. */
 const loadSeedData = (): SeedData => {
   const raw = fs.readFileSync(DATA_FILE, "utf-8");
   return JSON.parse(raw) as SeedData;
 };
 
+/**
+ * Removes all collections in the current database.
+ * Ensures no leftover users/cereals from other projects remain.
+ */
 const clearDatabase = async (): Promise<void> => {
   const db = mongoose.connection.db;
   if (!db) {
@@ -67,6 +80,7 @@ const clearDatabase = async (): Promise<void> => {
   }
 };
 
+/** Main seed routine: clear DB, then insert accounts (hashed) and boards. */
 const seed = async () => {
   if (!MONGODB_URI) {
     console.error(chalk.red("MONGODB_URI is missing in .env"));

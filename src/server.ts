@@ -1,3 +1,9 @@
+/**
+ * Application entry point.
+ *
+ * Sets up Express, CORS, MongoDB, API routes, and global error handling.
+ * Run with: npm run dev (development) or npm start (production build).
+ */
 import express, {
   type Request,
   type Response,
@@ -25,6 +31,11 @@ if (!MONGODB_URI) {
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+/**
+ * CORS middleware for the Angular app (localhost:4200).
+ * Allows custom `userId` header from AuthInterceptor.
+ * Answers OPTIONS preflight with 204 so browsers can call the API.
+ */
 app.use((req: Request, res: Response, next: NextFunction) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader(
@@ -44,6 +55,10 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
+/**
+ * GET /health — quick check that the server and database are up.
+ * Does not require authentication.
+ */
 app.get("/health", (_req: Request, res: Response) => {
   const dbReady = mongoose.connection.readyState === 1;
   res.status(dbReady ? 200 : 503).json({
@@ -55,6 +70,10 @@ app.get("/health", (_req: Request, res: Response) => {
   });
 });
 
+/**
+ * Blocks /api/* when MongoDB is not connected yet.
+ * Returns 503 with a clear message instead of hanging or crashing.
+ */
 app.use("/api", (req: Request, res: Response, next: NextFunction) => {
   if (mongoose.connection.readyState === 1) {
     return next();
@@ -69,11 +88,16 @@ app.use("/api", (req: Request, res: Response, next: NextFunction) => {
 app.use("/api/accounts", accountRoute);
 app.use("/api/boards", boardRoute);
 
+/** Catch-all for unknown URLs → 404 HttpError. */
 app.use((req: Request, res: Response, next: NextFunction) => {
   const error = new HttpError("Page not Found", 404);
   return next(error);
 });
 
+/**
+ * Global error handler.
+ * Controllers call `next(error)` with HttpError; this sends JSON to the client.
+ */
 app.use(
   (error: HttpError, req: Request, res: Response, next: NextFunction) => {
     if (res.headersSent) {
@@ -89,6 +113,10 @@ app.use(
   },
 );
 
+/**
+ * Starts the HTTP server first, then connects to MongoDB in the background.
+ * If MongoDB fails, the server still runs so /health can report the problem.
+ */
 const startServer = async () => {
   app.listen(PORT, "0.0.0.0", () => {
     console.log(
