@@ -9,6 +9,7 @@ import "dotenv/config";
 import mongoose from "mongoose";
 
 import accountRoute from "./routes/account-routes.js";
+import boardRoute from "./routes/board-routes.js";
 import HttpError from "./http-error/http-error.js";
 
 const app: Application = express();
@@ -37,6 +38,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 });
 
 app.use("/api/accounts", accountRoute);
+app.use("/api/boards", boardRoute);
 
 app.use((req: Request, res: Response, next: NextFunction) => {
   const error = new HttpError("Page not Found", 404);
