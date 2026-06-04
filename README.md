@@ -1,101 +1,156 @@
 # Kanban API
 
-Express + TypeScript + MongoDB backend for the Kanban board app.  
-Structured the same way as [cereal-backend](../cerealizer/cereal-backend).
+A TypeScript REST API for a multi-board Kanban application. Built with **Express 5**, **MongoDB**, and **JWT** authentication, following a layered architecture inspired by [cereal-backend](../cerealizer/cereal-backend).
 
-## Setup
+---
+
+## Table of Contents
+
+- [Features](#features)
+- [Quick Start](#quick-start)
+- [Documentation](#documentation)
+- [API Overview](#api-overview)
+- [Project Structure](#project-structure)
+- [Scripts](#scripts)
+- [Environment Variables](#environment-variables)
+- [License](#license)
+
+---
+
+## Features
+
+| Capability | Description |
+|------------|-------------|
+| **Accounts** | List accounts for client-side login; JWT-based login endpoint for protected routes |
+| **Boards** | Embedded columns and tasks in a single document per board |
+| **Seeding** | Import from `data/data.json`; clears the target database before insert |
+| **CORS** | Configured for Angular dev server (`localhost:4200`) with `userId` custom header |
+| **Health check** | `GET /health` reports API and database connectivity |
+
+---
+
+## Quick Start
+
+### Prerequisites
+
+- **Node.js** 18 or later
+- **MongoDB** 6+ (local install or [MongoDB Atlas](https://www.mongodb.com/cloud/atlas))
+
+### Installation
 
 ```bash
+git clone <repository-url>
+cd kanban-backend
 npm install
 cp .env.example .env
-# edit .env — set MONGODB_URI
-npm run seed
-npm run dev
 ```
+
+Edit `.env` and set `MONGODB_URI` (use database name **`kanban_db`**):
+
+```env
+MONGODB_URI=mongodb://localhost:27017/kanban_db
+JWT_SECRET=your-super-secret-jwt-key-at-least-16-chars
+```
+
+### Run
+
+```bash
+npm run seed    # load data/data.json into MongoDB
+npm run dev     # development server on http://localhost:3000
+```
+
+Verify:
+
+```bash
+curl http://localhost:3000/health
+curl http://localhost:3000/api/accounts
+```
+
+---
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [Setup Guide](docs/SETUP.md) | Local MongoDB, Atlas, environment, seeding |
+| [API Reference](docs/API.md) | Endpoints, request/response schemas, status codes |
+| [Architecture](docs/ARCHITECTURE.md) | Layers, data model, authentication flows |
+| [Frontend Integration](docs/FRONTEND.md) | Angular client configuration and headers |
+
+---
+
+## API Overview
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `GET` | `/health` | No | Service and database status |
+| `GET` | `/api/accounts` | No | List accounts (for Angular login UI) |
+| `POST` | `/api/accounts` | No | Login; returns JWT |
+| `GET` | `/api/boards` | Bearer JWT | All boards with columns and tasks |
+
+See [API Reference](docs/API.md) for full details and examples.
+
+---
+
+## Project Structure
+
+```
+kanban-backend/
+├── data/
+│   └── data.json           # Source of truth for seed + GET /api/accounts
+├── docs/                   # Documentation
+├── scripts/
+│   └── seed.ts             # Database seed script
+├── src/
+│   ├── server.ts           # Application entry point
+│   ├── controllers/        # Request handlers
+│   ├── routes/             # Express routers
+│   ├── models/             # Mongoose schemas
+│   ├── middleware/         # JWT authentication
+│   ├── http-error/         # Custom error type
+│   └── utils/              # Shared helpers
+├── .env.example
+├── package.json
+└── tsconfig.json
+```
+
+---
 
 ## Scripts
 
-| Command | What it does |
-|---------|----------------|
-| `npm run dev` | Watch TypeScript + run server with nodemon |
-| `npm start` | Build and run production server |
-| `npm run seed` | Clear DB and load `data/data.json` (accounts + boards only) |
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | TypeScript watch + nodemon with `tsx` (development) |
+| `npm start` | Compile with `tsc` and run `dist/server.js` (production) |
+| `npm run seed` | Drop all collections in `MONGODB_URI` DB, then seed from `data/data.json` |
+| `npm run watch` | TypeScript compiler in watch mode only |
 
-## API
+---
 
-### Login
+## Environment Variables
 
-```http
-POST /api/accounts
-Content-Type: application/json
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `PORT` | No | `3000` | HTTP server port |
+| `MONGODB_URI` | Yes | — | MongoDB connection string (use `kanban_db`) |
+| `JWT_SECRET` | No* | `do-not-share` | Secret for signing JWTs (*set in production) |
+| `JWT_EXPIRES_IN` | No | `7d` | Token lifetime (e.g. `1h`, `7d`) |
 
-{ "username": "demo", "password": "demo1234" }
-```
+---
 
-Response:
+## Demo Accounts
 
-```json
-{
-  "success": true,
-  "data": { "userId": "1", "token": "..." }
-}
-```
+After seeding, these accounts are available (see `data/data.json`):
 
-### Get all accounts (no token)
+| Username | Password | Role (app logic) |
+|----------|----------|------------------|
+| `demo` | `demo1234` | Standard user |
+| `guest` | `guest` | Read-only style user |
+| `manager` | `manager` | Manager |
+| `admin` | `admin` | Administrator |
 
-```http
-GET /api/accounts
-```
+---
 
-Response (array, matches Angular `User[]`):
+## License
 
-```json
-[
-  { "id": "1", "username": "demo", "password_hash": "demo1234" },
-  { "id": "2", "username": "guest", "password_hash": "guest" }
-]
-```
-
-### Get boards (needs token)
-
-```http
-GET /api/boards
-Authorization: Bearer <token>
-```
-
-## Project layout
-
-```
-src/
-  server.ts              # app entry, DB, CORS, errors
-  routes/                # account-routes, board-routes
-  controllers/           # login + get boards
-  models/                # mongoose schemas
-  middleware/            # check-auth (JWT)
-  http-error/            # HttpError class
-scripts/
-  seed.ts                # npm run seed
-```
-
-## Troubleshooting
-
-**"Connection was refused"** when calling the API usually means the Node server is not running. Start it with `npm run dev`.
-
-If the server is running but API calls fail, open `http://localhost:3000/health`:
-- `database: connected` — MongoDB is fine
-- `database: disconnected` — fix `MONGODB_URI` in `.env` (local MongoDB on `27017`, or your Atlas URI). Then run `npm run seed`.
-
-**MongoDB Compass "connection refused"** on `localhost:27017` means local MongoDB is not installed/running. This project can use Atlas instead — put that URI in `.env`, not Compass localhost.
-
-Use database name `kanban_db` in your URI (or run seed against whichever DB name you use).
-
-## Seed data
-
-Edit `data/data.json`, then run `npm run seed`. This **drops every collection** in the database configured by `MONGODB_URI`, then inserts only kanban **accounts** and **boards** (no users/cereals).
-
-| username | password |
-|----------|----------|
-| demo     | demo1234 |
-| guest    | guest    |
-| manager  | manager  |
-| admin    | admin    |
+ISC
