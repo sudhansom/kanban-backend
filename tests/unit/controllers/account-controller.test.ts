@@ -11,6 +11,7 @@ import {
   createMockRequest,
   createMockResponse,
 } from "../../helpers/mock-express.js";
+import { fakeAccount } from "../../helpers/mock-account.js";
 
 vi.mock("../../../src/models/account.js", () => ({
   Account: {
@@ -62,12 +63,15 @@ describe("account-controller", () => {
       expect(error).toBeInstanceOf(HttpError);
       expect((error as HttpError).code).toBe(401);
       expect(res.status).not.toHaveBeenCalled();
+      expect(error.message).toEqual("Invalid username or password");
     });
 
     it("calls next with 401 when password is missing", async () => {
       req.body = { username: "demo" };
 
       await loginAccount(req, res, next);
+
+      expect(next).toHaveBeenCalledOnce();
 
       expect((next as ReturnType<typeof vi.fn>).mock.calls[0][0]).toMatchObject({
         message: "Invalid username or password",
@@ -83,17 +87,14 @@ describe("account-controller", () => {
 
       expect(Account.findOne).toHaveBeenCalledWith({ username: "demo" });
       expect((next as ReturnType<typeof vi.fn>).mock.calls[0][0]).toMatchObject({
+        message: "Invalid username or password",
         code: 401,
       });
     });
 
     it("calls next with 401 when password does not match", async () => {
       req.body = { username: "demo", password: "wrong" };
-      vi.mocked(Account.findOne).mockResolvedValue({
-        userId: "1",
-        username: "demo",
-        passwordHash: "hashed",
-      });
+      vi.mocked(Account.findOne).mockResolvedValue(fakeAccount());
       vi.mocked(bcrypt.compare).mockResolvedValue(false as never);
 
       await loginAccount(req, res, next);
@@ -106,11 +107,7 @@ describe("account-controller", () => {
 
     it("returns 200 with userId and token on successful login", async () => {
       req.body = { username: "Demo", password: "demo1234" };
-      vi.mocked(Account.findOne).mockResolvedValue({
-        userId: "1",
-        username: "demo",
-        passwordHash: "hashed",
-      });
+      vi.mocked(Account.findOne).mockResolvedValue(fakeAccount());
       vi.mocked(bcrypt.compare).mockResolvedValue(true as never);
       vi.mocked(jwt.sign).mockReturnValue("fake-jwt-token" as never);
 
