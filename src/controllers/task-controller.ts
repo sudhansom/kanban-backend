@@ -119,6 +119,47 @@ const toApiTask = (
 });
 
 /**
+ * DELETE /api/tasks/:taskId — remove a task and close the gap in column positions.
+ */
+export const deleteTask = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+) => {
+  const taskId = Number(req.params.taskId);
+
+  if (!Number.isInteger(taskId) || taskId <= 0) {
+    const error = new HttpError("Invalid task id.", 400);
+    return next(error);
+  }
+
+  try {
+    const task = await Task.findOne({ taskId }).lean();
+
+    if (!task) {
+      const error = new HttpError("Task not found.", 404);
+      return next(error);
+    }
+
+    await Task.deleteOne({ taskId });
+    await Task.updateMany(
+      { columnId: task.columnId, position: { $gt: task.position } },
+      { $inc: { position: -1 } },
+    );
+
+    const accounts = await Account.find().select("username -_id").lean();
+    const validAssignees = new Set(
+      accounts.map((account) => account.username.toLowerCase()),
+    );
+
+    res.status(200).json(toApiTask(task, validAssignees));
+  } catch (_err) {
+    const error = new HttpError("An unknown error occurred.", 500);
+    return next(error);
+  }
+};
+
+/**
  * PUT /api/tasks/:taskId — update an existing task (never creates a new one).
  *
  * The task id in the URL is the source of truth. Body `id` must match when sent.
