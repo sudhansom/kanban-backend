@@ -15,6 +15,8 @@ import bcrypt from "bcryptjs";
 
 import { Account } from "../src/models/account.js";
 import { Board } from "../src/models/board.js";
+import { Column } from "../src/models/column.js";
+import { Task } from "../src/models/task.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_FILE = path.join(__dirname, "../data/data.json");
@@ -80,7 +82,7 @@ const clearDatabase = async (): Promise<void> => {
   }
 };
 
-/** Main seed routine: clear DB, then insert accounts (hashed) and boards. */
+/** Main seed routine: clear DB, then insert accounts/boards/columns/tasks. */
 const seed = async () => {
   if (!MONGODB_URI) {
     console.error(chalk.red("MONGODB_URI is missing in .env"));
@@ -110,22 +112,30 @@ const seed = async () => {
       await Board.create({
         boardId: board.id,
         name: board.name,
-        columns: board.columns.map((col) => ({
-          columnId: col.id,
-          name: col.name,
-          position: col.position,
-          boardId: col.board_id,
-          tasks: col.tasks.map((task) => ({
+      });
+      console.log(chalk.gray(`Added board: ${board.name}`));
+    }
+
+    for (const board of data.boards) {
+      for (const column of board.columns) {
+        await Column.create({
+          columnId: column.id,
+          name: column.name,
+          position: column.position,
+          boardId: column.board_id,
+        });
+
+        for (const task of column.tasks) {
+          await Task.create({
             taskId: task.id,
             title: task.title,
             description: task.description,
             assignee: task.assignee,
             columnId: task.column_id,
             position: task.position,
-          })),
-        })),
-      });
-      console.log(chalk.gray(`Added board: ${board.name}`));
+          });
+        }
+      }
     }
 
     console.log(

@@ -1,57 +1,81 @@
-import {
-  type NextFunction,
-  type Response,
-} from "express";
+import { type NextFunction, type Response } from "express";
+import { Account } from "../models/account.js";
 import { Board } from "../models/board.js";
-import { type IBoard, type IColumn } from "../models/board-types.js";
+import { Column } from "../models/column.js";
+import { Task } from "../models/task.js";
 import HttpError from "../http-error/http-error.js";
 import { type AuthenticatedRequest } from "../middleware/check-auth.js";
+import { type IBoard } from "../models/board-types.js";
+import { type IColumn } from "../models/column-types.js";
+import { type ITask } from "../models/task-types.js";
+import { type IAccount } from "../models/account-types.js";
 
 /**
- * Converts a MongoDB board document to the JSON shape the frontend expects.
- * Database uses camelCase (`boardId`); API uses `id` and snake_case (`board_id`, `column_id`).
- */
-const mapBoardToApi = (board: IBoard) => ({
-  id: board.boardId,
-  name: board.name,
-  columns: (board.columns ?? []).map((col: IColumn) => ({
-    id: col.columnId,
-    name: col.name,
-    position: col.position,
-    board_id: col.boardId,
-    tasks: (col.tasks ?? []).map((task) => ({
-      id: task.taskId,
-      title: task.title,
-      description: task.description,
-      assignee: task.assignee,
-      column_id: task.columnId,
-      position: task.position,
-    })),
-  })),
-});
-
-/**
- * GET /api/boards — return every board with columns and tasks.
+ * GET /api/boards — returns nested boards with columns and tasks.
  *
- * Requires `Authorization: Bearer <token>` (see isAuthenticated middleware).
+ * Data is normalized in MongoDB (separate collections), but this endpoint
+ * reconstructs the nested shape expected by the frontend.
  */
 export const getAllBoards = async (
   _req: AuthenticatedRequest,
   res: Response,
   next: NextFunction,
 ) => {
-  let boards;
   try {
-    boards = await Board.find().sort({ boardId: 1 }).lean();
-  } catch (err) {
+    const [boards, columns, tasks, accounts] = await Promise.all([
+      Board.find().sort({ boardId: 1 }).lean(),
+      Column.find().sort({ boardId: 1, position: 1 }).lean(),
+      Task.find().sort({ columnId: 1, position: 1 }).lean(),
+      Account.find().select("username -_id").lean(),
+    ]);
+
+    const usernameLookup = new Set(
+      (accounts as IAccount[]).map((account) => account.username.toLowerCase()),
+    );
+
+    const tasksByColumnId = new Map<number, ITask[]>();
+    for (const task of tasks as ITask[]) {
+      if (!tasksByColumnId.has(task.columnId)) {
+        tasksByColumnId.set(task.columnId, []);
+      }
+      tasksByColumnId.get(task.columnId)?.push(task);
+    }
+
+    const columnsByBoardId = new Map<number, IColumn[]>();
+    for (const column of columns as IColumn[]) {
+      if (!columnsByBoardId.has(column.boardId)) {
+        columnsByBoardId.set(column.boardId, []);
+      }
+      columnsByBoardId.get(column.boardId)?.push(column);
+    }
+
+    const apiBoards = (boards as IBoard[]).map((board) => ({
+      id: board.boardId,
+      name: board.name,
+      columns: (columnsByBoardId.get(board.boardId) ?? []).map((column) => ({
+        id: column.columnId,
+        name: column.name,
+        position: column.position,
+        board_id: column.boardId,
+        tasks: (tasksByColumnId.get(column.columnId) ?? []).map((task) => ({
+          id: task.taskId,
+          title: task.title,
+          description: task.description,
+          assignee: usernameLookup.has(task.assignee.toLowerCase())
+            ? task.assignee
+            : "",
+          column_id: task.columnId,
+          position: task.position,
+        })),
+      })),
+    }));
+
+    res.status(200).json({
+      success: true,
+      data: { boards: apiBoards },
+    });
+  } catch (_err) {
     const error = new HttpError("An unknown error occurred.", 500);
     return next(error);
   }
-
-  const apiBoards = boards.map((board) => mapBoardToApi(board as IBoard));
-
-  res.status(200).json({
-    success: true,
-    data: { boards: apiBoards },
-  });
 };
