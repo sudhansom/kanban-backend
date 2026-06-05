@@ -16,6 +16,7 @@ import mongoose from "mongoose";
 
 import accountRoute from "./routes/account-routes.js";
 import boardRoute from "./routes/board-routes.js";
+import columnRoute from "./routes/column-routes.js";
 import HttpError from "./http-error/http-error.js";
 import { Board } from "./models/board.js";
 
@@ -29,6 +30,39 @@ if (!MONGODB_URI) {
 }
 
 app.use(express.json());
+app.use(
+  (
+    err: SyntaxError & { status?: number; body?: unknown },
+    _req: Request,
+    _res: Response,
+    next: NextFunction,
+  ) => {
+    if (err instanceof SyntaxError && err.status === 400 && "body" in err) {
+      return next(
+        new HttpError(
+          'Invalid JSON body. Send { "name": "To Do", "position": 1 } as JSON with Content-Type: application/json (no extra quotes).',
+          400,
+        ),
+      );
+    }
+    return next(err);
+  },
+);
+app.use((req: Request, _res: Response, next: NextFunction) => {
+  if (typeof req.body === "string" && req.body.trim().startsWith("{")) {
+    try {
+      req.body = JSON.parse(req.body);
+    } catch {
+      return next(
+        new HttpError(
+          'Invalid JSON body. Send { "name": "To Do", "position": 1 } with Content-Type: application/json.',
+          400,
+        ),
+      );
+    }
+  }
+  return next();
+});
 app.use(express.urlencoded({ extended: true }));
 
 /**
@@ -87,6 +121,7 @@ app.use("/api", (req: Request, res: Response, next: NextFunction) => {
 
 app.use("/api/accounts", accountRoute);
 app.use("/api/boards", boardRoute);
+app.use("/api/columns", columnRoute);
 
 /** Catch-all for unknown URLs → 404 HttpError. */
 app.use((req: Request, res: Response, next: NextFunction) => {
