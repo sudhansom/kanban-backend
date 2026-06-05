@@ -11,18 +11,30 @@ import {
 } from "../../helpers/mock-express.js";
 
 vi.mock("../../../src/models/board.js", () => ({
-  Board: {
-    find: vi.fn(),
-  },
+  Board: { find: vi.fn() },
+}));
+
+vi.mock("../../../src/models/column.js", () => ({
+  Column: { find: vi.fn() },
+}));
+
+vi.mock("../../../src/models/task.js", () => ({
+  Task: { find: vi.fn() },
+}));
+
+vi.mock("../../../src/models/account.js", () => ({
+  Account: { find: vi.fn() },
 }));
 
 import { Board } from "../../../src/models/board.js";
+import { Column } from "../../../src/models/column.js";
+import { Task } from "../../../src/models/task.js";
+import { Account } from "../../../src/models/account.js";
 
-/** Builds a chainable mock for Board.find().sort().lean(). */
-const mockBoardFind = (result: unknown) => {
+const setupFindChain = (mockFind: ReturnType<typeof vi.fn>, result: unknown) => {
   const lean = vi.fn().mockResolvedValue(result);
   const sort = vi.fn().mockReturnValue({ lean });
-  vi.mocked(Board.find).mockReturnValue({ sort } as never);
+  mockFind.mockReturnValue({ sort } as never);
   return { sort, lean };
 };
 
@@ -40,34 +52,27 @@ describe("board-controller", () => {
 
   describe("getAllBoards", () => {
     it("returns boards mapped to API shape with snake_case fields", async () => {
-      mockBoardFind([
+      setupFindChain(vi.mocked(Board.find), [{ boardId: 1, name: "My Board" }]);
+      setupFindChain(vi.mocked(Column.find), [
+        { columnId: 1, name: "To Do", position: 0, boardId: 1 },
+      ]);
+      setupFindChain(vi.mocked(Task.find), [
         {
-          boardId: 1,
-          name: "My Board",
-          columns: [
-            {
-              columnId: 1,
-              name: "To Do",
-              position: 0,
-              boardId: 1,
-              tasks: [
-                {
-                  taskId: 1,
-                  title: "Welcome Task",
-                  description: "Drag me",
-                  assignee: "",
-                  columnId: 1,
-                  position: 0,
-                },
-              ],
-            },
-          ],
+          taskId: 1,
+          title: "Welcome Task",
+          description: "Drag me",
+          assignee: "demo",
+          columnId: 1,
+          position: 0,
         },
       ]);
+      const accountLean = vi.fn().mockResolvedValue([{ username: "demo" }]);
+      vi.mocked(Account.find).mockReturnValue({
+        select: vi.fn().mockReturnValue({ lean: accountLean }),
+      } as never);
 
       await getAllBoards(req, res, next);
 
-      expect(Board.find).toHaveBeenCalled();
       expect(res.status).toHaveBeenCalledWith(200);
       expect(res.json).toHaveBeenCalledWith({
         success: true,
@@ -87,7 +92,7 @@ describe("board-controller", () => {
                       id: 1,
                       title: "Welcome Task",
                       description: "Drag me",
-                      assignee: "",
+                      assignee: "demo",
                       column_id: 1,
                       position: 0,
                     },
@@ -102,7 +107,12 @@ describe("board-controller", () => {
     });
 
     it("returns empty boards array when database has no boards", async () => {
-      mockBoardFind([]);
+      setupFindChain(vi.mocked(Board.find), []);
+      setupFindChain(vi.mocked(Column.find), []);
+      setupFindChain(vi.mocked(Task.find), []);
+      vi.mocked(Account.find).mockReturnValue({
+        select: vi.fn().mockReturnValue({ lean: vi.fn().mockResolvedValue([]) }),
+      } as never);
 
       await getAllBoards(req, res, next);
 
@@ -113,7 +123,12 @@ describe("board-controller", () => {
     });
 
     it("sorts boards by boardId ascending", async () => {
-      const { sort } = mockBoardFind([]);
+      const { sort } = setupFindChain(vi.mocked(Board.find), []);
+      setupFindChain(vi.mocked(Column.find), []);
+      setupFindChain(vi.mocked(Task.find), []);
+      vi.mocked(Account.find).mockReturnValue({
+        select: vi.fn().mockReturnValue({ lean: vi.fn().mockResolvedValue([]) }),
+      } as never);
 
       await getAllBoards(req, res, next);
 
