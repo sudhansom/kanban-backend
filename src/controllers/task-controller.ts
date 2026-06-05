@@ -14,6 +14,15 @@ type TaskUpdateBody = {
   position?: number;
 };
 
+type TaskCreateBody = {
+  id?: number;
+  title?: string;
+  description?: string;
+  assignee?: string;
+  column_id?: number;
+  position?: number;
+};
+
 const parseTaskUpdateBody = (body: unknown): TaskUpdateBody => {
   if (typeof body === "string") {
     try {
@@ -99,6 +108,38 @@ const moveTaskToColumn = async (
   );
 };
 
+const parseTaskCreateBody = (body: unknown): TaskCreateBody => {
+  if (typeof body === "string") {
+    try {
+      return parseTaskCreateBody(JSON.parse(body));
+    } catch {
+      throw new HttpError(
+        'Invalid JSON body. Send a task object with Content-Type: application/json.',
+        400,
+      );
+    }
+  }
+
+  if (body === null || typeof body !== "object") {
+    throw new HttpError(
+      'Invalid JSON body. Send a task object with Content-Type: application/json.',
+      400,
+    );
+  }
+
+  return body as TaskCreateBody;
+};
+
+const getNextTaskId = async () => {
+  const lastTask = await Task.findOne().sort({ taskId: -1 }).select("taskId").lean();
+  return (lastTask?.taskId ?? 0) + 1;
+};
+
+const loadValidAssignees = async () => {
+  const accounts = await Account.find().select("username -_id").lean();
+  return new Set(accounts.map((account) => account.username.toLowerCase()));
+};
+
 const toApiTask = (
   task: {
     taskId: number;
@@ -117,6 +158,96 @@ const toApiTask = (
   column_id: task.columnId,
   position: task.position,
 });
+
+/**
+ * POST /api/tasks — create a new task in a column.
+ *
+ * Body: `{ title, description?, assignee?, column_id, position? }`
+ * Assigns the next task id and appends to the column when position is omitted.
+ */
+export const createTask = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+) => {
+  let body: TaskCreateBody;
+  try {
+    body = parseTaskCreateBody(req.body);
+  } catch (error) {
+    return next(error);
+  }
+
+  const { title, description, assignee, column_id, position } = body;
+  const parsedColumnId = parseOptionalInt(column_id);
+  const parsedPosition = parseOptionalInt(position);
+
+  if (title === undefined || typeof title !== "string" || title.trim() === "") {
+    const error = new HttpError("Title must be a non-empty string.", 400);
+    return next(error);
+  }
+
+  if (parsedColumnId === undefined || parsedColumnId <= 0) {
+    const error = new HttpError("column_id must be a positive integer.", 400);
+    return next(error);
+  }
+
+  if (description !== undefined && typeof description !== "string") {
+    const error = new HttpError("Description must be a string.", 400);
+    return next(error);
+  }
+
+  if (assignee !== undefined && typeof assignee !== "string") {
+    const error = new HttpError("Assignee must be a string.", 400);
+    return next(error);
+  }
+
+  if (position !== undefined && position !== null && parsedPosition === undefined) {
+    const error = new HttpError("Position must be a non-negative integer.", 400);
+    return next(error);
+  }
+
+  if (parsedPosition !== undefined && parsedPosition < 0) {
+    const error = new HttpError("Position must be a non-negative integer.", 400);
+    return next(error);
+  }
+
+  try {
+    const column = await Column.findOne({ columnId: parsedColumnId }).lean();
+    if (!column) {
+      const error = new HttpError("Column not found.", 404);
+      return next(error);
+    }
+
+    const taskCount = await Task.countDocuments({ columnId: parsedColumnId });
+    const maxPosition = taskCount;
+    const newPosition =
+      parsedPosition !== undefined
+        ? clampPosition(parsedPosition, maxPosition)
+        : taskCount;
+
+    await Task.updateMany(
+      { columnId: parsedColumnId, position: { $gte: newPosition } },
+      { $inc: { position: 1 } },
+    );
+
+    const taskId = await getNextTaskId();
+    const createdTask = await Task.create({
+      taskId,
+      title: title.trim(),
+      description: description ?? "",
+      assignee: assignee?.trim() ?? "",
+      columnId: parsedColumnId,
+      position: newPosition,
+    });
+
+    const validAssignees = await loadValidAssignees();
+
+    res.status(201).json(toApiTask(createdTask.toObject(), validAssignees));
+  } catch (_err) {
+    const error = new HttpError("An unknown error occurred.", 500);
+    return next(error);
+  }
+};
 
 /**
  * DELETE /api/tasks/:taskId — remove a task and close the gap in column positions.
@@ -147,10 +278,7 @@ export const deleteTask = async (
       { $inc: { position: -1 } },
     );
 
-    const accounts = await Account.find().select("username -_id").lean();
-    const validAssignees = new Set(
-      accounts.map((account) => account.username.toLowerCase()),
-    );
+    const validAssignees = await loadValidAssignees();
 
     res.status(200).json(toApiTask(task, validAssignees));
   } catch (_err) {
@@ -336,10 +464,7 @@ export const updateTask = async (
       return next(error);
     }
 
-    const accounts = await Account.find().select("username -_id").lean();
-    const validAssignees = new Set(
-      accounts.map((account) => account.username.toLowerCase()),
-    );
+    const validAssignees = await loadValidAssignees();
 
     // Flat task object — matches the Python API and Angular frontend expectation.
     res.status(200).json(toApiTask(updatedTask, validAssignees));
