@@ -16,20 +16,37 @@ import {
 } from "../../helpers/mock-express.js";
 
 const mockBoardFind = jest.fn<() => { sort: jest.Mock }>();
+const mockColumnFind = jest.fn<() => { sort: jest.Mock }>();
+const mockTaskFind = jest.fn<() => { sort: jest.Mock }>();
+const mockAccountFind = jest.fn<() => { select: jest.Mock }>();
 
 await jest.unstable_mockModule("../../../src/models/board.js", () => ({
   Board: { find: mockBoardFind },
+}));
+
+await jest.unstable_mockModule("../../../src/models/column.js", () => ({
+  Column: { find: mockColumnFind },
+}));
+
+await jest.unstable_mockModule("../../../src/models/task.js", () => ({
+  Task: { find: mockTaskFind },
+}));
+
+await jest.unstable_mockModule("../../../src/models/account.js", () => ({
+  Account: { find: mockAccountFind },
 }));
 
 const { getAllBoards } = await import(
   "../../../src/controllers/board-controller.js"
 );
 
-/** Builds a chainable mock for Board.find().sort().lean(). */
-const setupBoardFindChain = (result: unknown) => {
+const setupFindChain = (
+  mockFind: jest.Mock,
+  result: unknown,
+) => {
   const lean = jest.fn<() => Promise<unknown>>().mockResolvedValue(result);
   const sort = jest.fn().mockReturnValue({ lean });
-  mockBoardFind.mockReturnValue({ sort });
+  mockFind.mockReturnValue({ sort });
   return { sort, lean };
 };
 
@@ -47,34 +64,28 @@ describe("board-controller", () => {
 
   describe("getAllBoards", () => {
     it("returns boards mapped to API shape with snake_case fields", async () => {
-      setupBoardFindChain([
+      setupFindChain(mockBoardFind, [{ boardId: 1, name: "My Board" }]);
+      setupFindChain(mockColumnFind, [
+        { columnId: 1, name: "To Do", position: 0, boardId: 1 },
+      ]);
+      setupFindChain(mockTaskFind, [
         {
-          boardId: 1,
-          name: "My Board",
-          columns: [
-            {
-              columnId: 1,
-              name: "To Do",
-              position: 0,
-              boardId: 1,
-              tasks: [
-                {
-                  taskId: 1,
-                  title: "Welcome Task",
-                  description: "Drag me",
-                  assignee: "",
-                  columnId: 1,
-                  position: 0,
-                },
-              ],
-            },
-          ],
+          taskId: 1,
+          title: "Welcome Task",
+          description: "Drag me",
+          assignee: "demo",
+          columnId: 1,
+          position: 0,
         },
       ]);
+      const accountLean = jest
+        .fn<() => Promise<unknown>>()
+        .mockResolvedValue([{ username: "demo" }]);
+      const select = jest.fn().mockReturnValue({ lean: accountLean });
+      mockAccountFind.mockReturnValue({ select });
 
       await getAllBoards(req, res, next);
 
-      expect(mockBoardFind).toHaveBeenCalled();
       expect(res.status).toHaveBeenCalledWith(200);
       expect(res.json).toHaveBeenCalledWith({
         success: true,
@@ -94,7 +105,7 @@ describe("board-controller", () => {
                       id: 1,
                       title: "Welcome Task",
                       description: "Drag me",
-                      assignee: "",
+                      assignee: "demo",
                       column_id: 1,
                       position: 0,
                     },
@@ -109,7 +120,13 @@ describe("board-controller", () => {
     });
 
     it("returns empty boards array when database has no boards", async () => {
-      setupBoardFindChain([]);
+      setupFindChain(mockBoardFind, []);
+      setupFindChain(mockColumnFind, []);
+      setupFindChain(mockTaskFind, []);
+      const accountLean = jest.fn().mockResolvedValue([]);
+      mockAccountFind.mockReturnValue({
+        select: jest.fn().mockReturnValue({ lean: accountLean }),
+      });
 
       await getAllBoards(req, res, next);
 
@@ -120,7 +137,14 @@ describe("board-controller", () => {
     });
 
     it("sorts boards by boardId ascending", async () => {
-      const { sort } = setupBoardFindChain([]);
+      const { sort } = setupFindChain(mockBoardFind, []);
+      setupFindChain(mockColumnFind, []);
+      setupFindChain(mockTaskFind, []);
+      mockAccountFind.mockReturnValue({
+        select: jest.fn().mockReturnValue({
+          lean: jest.fn().mockResolvedValue([]),
+        }),
+      });
 
       await getAllBoards(req, res, next);
 
