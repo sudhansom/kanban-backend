@@ -17,6 +17,7 @@ import mongoose from "mongoose";
 import accountRoute from "./routes/account-routes.js";
 import boardRoute from "./routes/board-routes.js";
 import columnRoute from "./routes/column-routes.js";
+import taskRoute from "./routes/task-routes.js";
 import HttpError from "./http-error/http-error.js";
 import { Board } from "./models/board.js";
 
@@ -122,6 +123,7 @@ app.use("/api", (req: Request, res: Response, next: NextFunction) => {
 app.use("/api/accounts", accountRoute);
 app.use("/api/boards", boardRoute);
 app.use("/api/columns", columnRoute);
+app.use("/api/tasks", taskRoute);
 
 /** Catch-all for unknown URLs → 404 HttpError. */
 app.use((req: Request, res: Response, next: NextFunction) => {
