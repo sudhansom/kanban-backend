@@ -36,6 +36,22 @@ const parseTaskUpdateBody = (body: unknown): TaskUpdateBody => {
   return body as TaskUpdateBody;
 };
 
+const parseOptionalInt = (value: unknown): number | undefined => {
+  if (value === undefined || value === null || value === "") {
+    return undefined;
+  }
+
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed)) {
+    return undefined;
+  }
+
+  return parsed;
+};
+
+const clampPosition = (position: number, maxPosition: number) =>
+  Math.min(Math.max(0, position), maxPosition);
+
 const reorderTasksInColumn = async (
   columnId: number,
   taskId: number,
@@ -128,8 +144,11 @@ export const updateTask = async (
   }
 
   const { id, title, description, assignee, column_id, position } = body;
+  const bodyId = parseOptionalInt(id);
+  const parsedColumnId = parseOptionalInt(column_id);
+  const parsedPosition = parseOptionalInt(position);
 
-  if (id === 0) {
+  if (bodyId === 0) {
     const error = new HttpError(
       "Cannot create a task with PUT. Use POST /api/tasks instead.",
       400,
@@ -137,7 +156,7 @@ export const updateTask = async (
     return next(error);
   }
 
-  if (id !== undefined && id !== taskId) {
+  if (bodyId !== undefined && bodyId !== taskId) {
     const error = new HttpError(
       "Body id must match the task id in the URL.",
       400,
@@ -149,8 +168,8 @@ export const updateTask = async (
     title === undefined &&
     description === undefined &&
     assignee === undefined &&
-    column_id === undefined &&
-    position === undefined
+    parsedColumnId === undefined &&
+    parsedPosition === undefined
   ) {
     const error = new HttpError("At least one field is required to update.", 400);
     return next(error);
@@ -171,18 +190,17 @@ export const updateTask = async (
     return next(error);
   }
 
-  if (
-    column_id !== undefined &&
-    (!Number.isInteger(column_id) || column_id <= 0)
-  ) {
+  if (column_id !== undefined && (parsedColumnId === undefined || parsedColumnId <= 0)) {
     const error = new HttpError("column_id must be a positive integer.", 400);
     return next(error);
   }
 
-  if (
-    position !== undefined &&
-    (!Number.isInteger(position) || position < 0)
-  ) {
+  if (position !== undefined && position !== null && parsedPosition === undefined) {
+    const error = new HttpError("Position must be a non-negative integer.", 400);
+    return next(error);
+  }
+
+  if (parsedPosition !== undefined && parsedPosition < 0) {
     const error = new HttpError("Position must be a non-negative integer.", 400);
     return next(error);
   }
@@ -195,7 +213,7 @@ export const updateTask = async (
       return next(error);
     }
 
-    const newColumnId = column_id ?? existingTask.columnId;
+    const newColumnId = parsedColumnId ?? existingTask.columnId;
     const columnChanged = newColumnId !== existingTask.columnId;
 
     if (columnChanged) {
@@ -210,22 +228,18 @@ export const updateTask = async (
     const targetTaskCount = columnChanged
       ? await Task.countDocuments({ columnId: newColumnId })
       : 0;
-    const newPosition =
-      position ??
+    const requestedPosition =
+      parsedPosition ??
       (columnChanged ? targetTaskCount : existingTask.position);
+
+    let newPosition = requestedPosition;
     const positionChanged =
       newPosition !== existingTask.position || columnChanged;
 
     if (columnChanged) {
       const maxPosition = targetTaskCount;
-
-      if (newPosition > maxPosition) {
-        const error = new HttpError(
-          `Position must be between 0 and ${maxPosition}.`,
-          400,
-        );
-        return next(error);
-      }
+      // Frontend uses a sentinel row with position 1111 for drop-at-end.
+      newPosition = clampPosition(requestedPosition, maxPosition);
 
       await moveTaskToColumn(
         existingTask.columnId,
@@ -233,17 +247,10 @@ export const updateTask = async (
         newColumnId,
         newPosition,
       );
-    } else if (position !== undefined && newPosition !== existingTask.position) {
+    } else if (parsedPosition !== undefined && requestedPosition !== existingTask.position) {
       const taskCount = await Task.countDocuments({ columnId: existingTask.columnId });
       const maxPosition = taskCount - 1;
-
-      if (newPosition > maxPosition) {
-        const error = new HttpError(
-          `Position must be between 0 and ${maxPosition}.`,
-          400,
-        );
-        return next(error);
-      }
+      newPosition = clampPosition(requestedPosition, maxPosition);
 
       await reorderTasksInColumn(
         existingTask.columnId,

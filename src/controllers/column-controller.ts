@@ -30,6 +30,22 @@ const parseColumnUpdateBody = (body: unknown): ColumnUpdateBody => {
   return body as ColumnUpdateBody;
 };
 
+const parseOptionalInt = (value: unknown): number | undefined => {
+  if (value === undefined || value === null || value === "") {
+    return undefined;
+  }
+
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed)) {
+    return undefined;
+  }
+
+  return parsed;
+};
+
+const clampPosition = (position: number, maxPosition: number) =>
+  Math.min(Math.max(0, position), maxPosition);
+
 /**
  * Shifts sibling columns on the same board when one column moves position.
  * Positions stay unique and contiguous (0 … n-1).
@@ -91,21 +107,24 @@ export const updateColumn = async (
   }
 
   const { name, position } = body;
+  const parsedPosition = parseOptionalInt(position);
 
-  if (name === undefined && position === undefined) {
+  if (name === undefined && parsedPosition === undefined) {
     const error = new HttpError("At least one of name or position is required.", 400);
     return next(error);
   }
 
-  if (name !== undefined && (typeof name !== "string" || name.trim() === "")) {
-    const error = new HttpError("Name must be a non-empty string.", 400);
+  if (name !== undefined && typeof name !== "string") {
+    const error = new HttpError("Name must be a string.", 400);
     return next(error);
   }
 
-  if (
-    position !== undefined &&
-    (!Number.isInteger(position) || position < 0)
-  ) {
+  if (position !== undefined && position !== null && parsedPosition === undefined) {
+    const error = new HttpError("Position must be a non-negative integer.", 400);
+    return next(error);
+  }
+
+  if (parsedPosition !== undefined && parsedPosition < 0) {
     const error = new HttpError("Position must be a non-negative integer.", 400);
     return next(error);
   }
@@ -121,20 +140,15 @@ export const updateColumn = async (
     const columnCount = await Column.countDocuments({ boardId: column.boardId });
     const maxPosition = columnCount - 1;
 
-    if (position !== undefined && position > maxPosition) {
-      const error = new HttpError(
-        `Position must be between 0 and ${maxPosition}.`,
-        400,
-      );
-      return next(error);
-    }
-
-    if (name !== undefined) {
+    if (name !== undefined && name.trim() !== "") {
       column.name = name.trim();
     }
 
     const oldPosition = column.position;
-    const newPosition = position ?? oldPosition;
+    const newPosition =
+      parsedPosition !== undefined
+        ? clampPosition(parsedPosition, maxPosition)
+        : oldPosition;
 
     if (newPosition !== oldPosition) {
       await reorderBoardColumns(
