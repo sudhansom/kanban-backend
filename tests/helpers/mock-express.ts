@@ -1,5 +1,6 @@
 import { jest } from "@jest/globals";
-import type { NextFunction, Request, Response } from "express";
+import type { NextFunction, Response } from "express";
+import type { AuthenticatedRequest } from "../../src/middleware/check-auth.js";
 
 /** Minimal mock Express response for controller unit tests. */
 export const createMockResponse = () => {
@@ -16,13 +17,13 @@ export const createMockResponse = () => {
 
 /** Mock Express request with optional body and headers. */
 export const createMockRequest = (
-  overrides: Partial<Request> = {},
-): Request => ({
+  overrides: Partial<AuthenticatedRequest> = {},
+): AuthenticatedRequest => ({
   body: {},
   headers: {},
   method: "GET",
   ...overrides,
-}) as Request;
+}) as AuthenticatedRequest;
 
 /** Spy on Express next — captures HttpError passed from controllers. */
 export const createMockNext = () => jest.fn() as NextFunction;
