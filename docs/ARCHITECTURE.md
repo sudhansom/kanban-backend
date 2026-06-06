@@ -227,7 +227,7 @@ Global handler in `server.ts` responds with:
 
 Suggested improvements (not yet implemented):
 
-- Vitest unit/integration tests
+- Jest unit/integration tests
 - Move `GET /api/accounts` to read from MongoDB only
 - Rate limiting and Helmet for production hardening
 - CRUD endpoints for boards, columns, and tasks
