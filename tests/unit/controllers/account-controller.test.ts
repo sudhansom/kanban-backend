@@ -136,6 +136,8 @@ describe("account-controller", () => {
   });
 
   describe("getAllAccounts", () => {
+    // GET /api/accounts is public — account-routes mounts it without isAuthenticated.
+
     it("returns accounts array from data file", async () => {
       const mockAccounts = [
         { id: "1", username: "demo", password_hash: "demo1234" },
@@ -148,9 +150,39 @@ describe("account-controller", () => {
 
       await getAllAccounts(req, res, next);
 
-      expect(loadDataFile).toHaveBeenCalled();
+      expect(loadDataFile).toHaveBeenCalledTimes(1);
       expect(res.status).toHaveBeenCalledWith(200);
       expect(res.json).toHaveBeenCalledWith(mockAccounts);
+      expect(next).not.toHaveBeenCalled();
+    });
+
+    it("returns empty array when data file has no accounts", async () => {
+      vi.mocked(loadDataFile).mockReturnValue({
+        accounts: [],
+        boards: [],
+      });
+
+      await getAllAccounts(req, res, next);
+
+      expect(loadDataFile).toHaveBeenCalledTimes(1);
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith([]);
+      expect(next).not.toHaveBeenCalled();
+    });
+
+    it("does not require authentication (public login-screen endpoint)", async () => {
+      req = createMockRequest({ headers: {} });
+      vi.mocked(loadDataFile).mockReturnValue({
+        accounts: [{ id: "1", username: "demo", password_hash: "demo1234" }],
+        boards: [],
+      });
+
+      await getAllAccounts(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith([
+        { id: "1", username: "demo", password_hash: "demo1234" },
+      ]);
       expect(next).not.toHaveBeenCalled();
     });
 
@@ -164,6 +196,8 @@ describe("account-controller", () => {
       expect((next as ReturnType<typeof vi.fn>).mock.calls[0][0]).toMatchObject({
         code: 500,
       });
+      expect(res.status).not.toHaveBeenCalled();
+      expect(res.json).not.toHaveBeenCalled();
     });
   });
 });
